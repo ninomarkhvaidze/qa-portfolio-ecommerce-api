@@ -1,0 +1,459 @@
+{
+  "info": {
+    "name": "E-Commerce API - QA Regression Suite",
+    "description": "Automated Postman/Newman regression suite built from manual QA test cases. See /test-cases and /bugs in the repo root for full context. Run with the ECommerce-API.postman_environment.json environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('sessionId')) {",
+          "    pm.environment.set('sessionId', 'qa-session-' + Date.now());",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "PT-01 Get all products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Returns an array of products', () => {",
+              "    const body = pm.response.json();",
+              "    pm.expect(Array.isArray(body.products || body)).to.be.true;",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "PT-02 Get existing product by ID (BUG-01 regression)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{validProductId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{validProductId}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "// Regression test for BUG-01: this product ID is confirmed to exist via PT-01.",
+              "// As of the last manual test run, this endpoint incorrectly returned 404.",
+              "// This test should FAIL until BUG-01 is fixed, then PASS going forward.",
+              "pm.test('BUG-01: existing product ID resolves (expected 200)', () => {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "PT-03 Get nonexistent product by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/999999", "host": ["{{baseUrl}}"], "path": ["api", "products", "999999"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+              "pm.test('Body indicates NOT_FOUND', () => {",
+              "    pm.expect(pm.response.text()).to.include('not found');",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "PT-04 Get product by slug",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/slug/{{validProductSlug}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "slug", "{{validProductSlug}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Cart",
+      "item": [
+        {
+          "name": "TC-01 Add valid product to cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{validProductId}},\n  \"quantity\": 1\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/cart/items", "host": ["{{baseUrl}}"], "path": ["api", "cart", "items"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 200 or 201', () => pm.expect([200,201]).to.include(pm.response.code));",
+              "if (pm.response.code < 300) {",
+              "    const body = pm.response.json();",
+              "    if (body.id) pm.environment.set('cartItemId', body.id);",
+              "}"
+            ]}
+          }]
+        },
+        {
+          "name": "TC-04 Add product with quantity 0 (rejected)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{validProductId}},\n  \"quantity\": 0\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/cart/items", "host": ["{{baseUrl}}"], "path": ["api", "cart", "items"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 400 (validation error)', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "TC-06 Add nonexistent product",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 999999,\n  \"quantity\": 1\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/cart/items", "host": ["{{baseUrl}}"], "path": ["api", "cart", "items"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 404', () => pm.response.to.have.status(404));"
+            ]}
+          }]
+        },
+        {
+          "name": "TC-07 Add item without X-Session-ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{validProductId}},\n  \"quantity\": 1\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/cart/items", "host": ["{{baseUrl}}"], "path": ["api", "cart", "items"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 400 - missing session header', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "TC-09 Get cart",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-ID", "value": "{{sessionId}}" }],
+            "url": { "raw": "{{baseUrl}}/api/cart", "host": ["{{baseUrl}}"], "path": ["api", "cart"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Response has totalItems and totalAmount', () => {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body).to.have.property('totalItems');",
+              "    pm.expect(body).to.have.property('totalAmount');",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "Stock boundary - add exactly available stock (product 19)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{stockTestProductId}},\n  \"quantity\": 12\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/cart/items", "host": ["{{baseUrl}}"], "path": ["api", "cart", "items"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "// Assumes cart already has 1 unit of product 19; total becomes 13 (== available stock)",
+              "pm.test('Status is 200 or 201 (accepted at stock boundary)', () => pm.expect([200,201]).to.include(pm.response.code));"
+            ]}
+          }]
+        },
+        {
+          "name": "PT-06 Add quantity greater than available stock (rejected)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{stockTestProductId}},\n  \"quantity\": 9999\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/cart/items", "host": ["{{baseUrl}}"], "path": ["api", "cart", "items"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 400 - OUT_OF_STOCK', () => pm.response.to.have.status(400));",
+              "pm.test('Body mentions stock', () => pm.expect(pm.response.text().toLowerCase()).to.include('stock'));"
+            ]}
+          }]
+        },
+        {
+          "name": "TC-15 Delete cart item",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-Session-ID", "value": "{{sessionId}}" }],
+            "url": { "raw": "{{baseUrl}}/api/cart/items/{{cartItemId}}", "host": ["{{baseUrl}}"], "path": ["api", "cart", "items", "{{cartItemId}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 200 or 204', () => pm.expect([200,204]).to.include(pm.response.code));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "TC-18 Create order without authentication",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"address\": \"123 Main St\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiry\": \"01/30\",\n  \"cvv\": \"123\",\n  \"cardholderName\": \"John Doe\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+            ]}
+          }]
+        },
+        {
+          "name": "TC-20 Create order without X-Session-ID (open question)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"address\": \"123 Main St\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiry\": \"01/30\",\n  \"cvv\": \"123\",\n  \"cardholderName\": \"John Doe\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "// Documented behavior returns CART_EMPTY instead of a header-validation error.",
+              "// Flagged as an open question, not yet filed as a bug - see test-reports.",
+              "pm.test('Returns 400 (either CART_EMPTY or explicit header validation)', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "TC-21 Empty shipping first name",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"\",\n  \"lastName\": \"Doe\",\n  \"address\": \"123 Main St\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiry\": \"01/30\",\n  \"cvv\": \"123\",\n  \"cardholderName\": \"John Doe\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+              "pm.test('Message mentions first name', () => pm.expect(pm.response.text().toLowerCase()).to.include('first name'));"
+            ]}
+          }]
+        },
+        {
+          "name": "BUG-02 regression - whitespace-only first name",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"   \",\n  \"lastName\": \"   \",\n  \"address\": \"123 Main St\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiry\": \"01/30\",\n  \"cvv\": \"123\",\n  \"cardholderName\": \"John Doe\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "// API-level regression companion to BUG-02 (which was found in the UI).",
+              "// This confirms whether the underlying API also fails to trim whitespace.",
+              "pm.test('Whitespace-only names are rejected (expected 400)', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "TC-16 Create valid order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"address\": \"123 Main St\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiry\": \"01/30\",\n  \"cvv\": \"123\",\n  \"cardholderName\": \"John Doe\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 200 or 201', () => pm.expect([200,201]).to.include(pm.response.code));",
+              "if (pm.response.code < 300) {",
+              "    const body = pm.response.json();",
+              "    if (body.id) pm.environment.set('orderId', body.id);",
+              "}"
+            ]}
+          }]
+        },
+        {
+          "name": "Get order by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Session-ID", "value": "{{sessionId}}" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+            ]}
+          }]
+        },
+        {
+          "name": "Get nonexistent order",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Session-ID", "value": "{{sessionId}}" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/orders/999999", "host": ["{{baseUrl}}"], "path": ["api", "orders", "999999"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 404', () => pm.response.to.have.status(404));"
+            ]}
+          }]
+        },
+        {
+          "name": "Unauthorized access to another user's order",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Session-ID", "value": "{{sessionId}}" },
+              { "key": "Authorization", "value": "Bearer INVALID_OR_OTHER_USER_TOKEN" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 404 (no data exposure) or 401', () => pm.expect([401,404]).to.include(pm.response.code));"
+            ]}
+          }]
+        },
+        {
+          "name": "TC-19 Create order with invalid credentials",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Session-ID", "value": "{{sessionId}}" },
+              { "key": "Authorization", "value": "Bearer invalid-token" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"address\": \"123 Main St\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiry\": \"01/30\",\n  \"cvv\": \"123\",\n  \"cardholderName\": \"John Doe\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+            ]}
+          }]
+        }
+      ]
+    }
+  ]
+}
