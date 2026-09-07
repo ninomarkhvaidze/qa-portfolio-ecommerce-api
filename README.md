@@ -51,4 +51,4 @@ Full context: [test execution report](test-reports/test-execution-report-2026-09
 
 ## Author
 
-QA Tester with a background in manual and API testing (Postman, Playwright/TypeScript). Reach out via GitHub for questions about this project.
+QA Tester with a background in manual UI and API testing. Reach out via GitHub for questions about this project.
